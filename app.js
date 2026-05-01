@@ -5,6 +5,13 @@ const params = new URLSearchParams(window.location.search);
 const roomId = params.get("room");
 
 // デフォルト値（roomが無い場合）
-const room = roomId || "default";
+const params = new URLSearchParams(window.location.search);
+let room = params.get("room");
+
+if (!room) {
+  room = createRoomId();
+  location.replace(`?room=${room}`);
+}
+
 
 console.log("Current room:", room);
