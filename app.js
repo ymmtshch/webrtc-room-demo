@@ -16,3 +16,8 @@ console.log("Current room:", room);
 
 document.getElementById("room").textContent =
   "Room: " + room;
+
+
+
+const pc = new RTCPeerConnection();
+console.log("RTCPeerConnection created", pc);
