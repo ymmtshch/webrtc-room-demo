@@ -22,3 +22,10 @@ console.log("RTCPeerConnection created", pc);
 pc.oniceconnectionstatechange = () => {
   console.log("ICE state:", pc.iceConnectionState);
 };
+
+// --- Step 3-2 ---
+async function createOffer() {
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  console.log("Offer created:", offer);
+}
