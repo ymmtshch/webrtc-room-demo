@@ -24,8 +24,7 @@ pc.oniceconnectionstatechange = () => {
 };
 
 // --- Step 3-2 ---
-const pc = new RTCPeerConnection();
-console.log("RTCPeerConnection created", pc);
+// ★ pc は「新しく作らない」
 
 async function createOffer() {
   const offer = await pc.createOffer();
