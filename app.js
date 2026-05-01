@@ -1,10 +1,9 @@
-// URLの ?以降（クエリ文字列）を取得
-const params = new URLSearchParams(window.location.search);
+console.log("app.js is loaded");
 
-// room パラメータを取得
-const roomId = params.get("room");
+function createRoomId() {
+  return crypto.randomUUID().slice(0, 8);
+}
 
-// デフォルト値（roomが無い場合）
 const params = new URLSearchParams(window.location.search);
 let room = params.get("room");
 
@@ -13,5 +12,7 @@ if (!room) {
   location.replace(`?room=${room}`);
 }
 
-
 console.log("Current room:", room);
+
+document.getElementById("room").textContent =
+  "Room: " + room;
