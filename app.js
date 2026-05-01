@@ -1,15 +1,6 @@
-// ===== Utils =====
-function $(id) { return document.getElementById(id); }
-function logLine(s) {
-  const ta = $("log");
-  ta.value += s + "\n";
-  ta.scrollTop = ta.scrollHeight;
-}
-function shortId() {
-  return crypto.randomUUID().slice(0, 8);
-}
-
-// ===== Step 2-2: room handling =====
+// ===== room 取得（?room=xxxx） =====
+// URLSearchParams は URLのクエリ（?以降）を扱う標準APIです。[3](https://blog.dcycle.com/blog/2023-11-15/github-pages-https-apex-www/)
+function shortId(){ return crypto.randomUUID().slice(0, 8); }
 const params = new URLSearchParams(window.location.search);
 let room = params.get("room");
 
@@ -18,224 +9,192 @@ if (!room) {
   location.replace(`?room=${room}`);
 }
 
+const $ = (id) => document.getElementById(id);
 $("room").textContent = room;
 $("shareUrl").value = location.href;
 
 $("copyUrl").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(location.href);
-    logLine("[UI] Copied URL to clipboard");
   } catch {
-    logLine("[UI] Clipboard copy failed (permission?)");
+    alert("クリップボードにコピーできませんでした（権限/環境を確認してください）");
   }
 });
 
-// ===== Step 3: WebRTC + Signaling (BroadcastChannel) =====
+// ===== ストレージ（localStorage） =====
+const STORE_KEY = `attendance-board:${room}`;
 
-// BroadcastChannel: same-origin tab-to-tab messaging
-// Channel name is per-room so only same room tabs talk to each other.
+const DEFAULT_NAMES = [
+  "山田",
+  "佐藤",
+  "鈴木"
+];
+
+function nowStr(){
+  const d = new Date();
+  const pad = (n)=> String(n).padStart(2,"0");
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// state shape:
+// {
+//   names: ["A","B"],
+//   status: { "A": { state:"in|out|remote", updatedAt:"..." }, ... },
+//   updatedAt: "..."
+// }
+function loadState(){
+  const raw = localStorage.getItem(STORE_KEY);
+  if (raw) return JSON.parse(raw);
+
+  const names = DEFAULT_NAMES;
+  const status = {};
+  for (const n of names) status[n] = { state:"out", updatedAt: nowStr() };
+  return { names, status, updatedAt: nowStr() };
+}
+
+function saveState(state){
+  state.updatedAt = nowStr();
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  $("updated").textContent = state.updatedAt;
+}
+
+// ===== タブ間同期（BroadcastChannel） =====
+// BroadcastChannel は同一オリジンの別タブ間でメッセージ交換できる標準APIです。[2](https://aws.amazon.com/api-gateway/pricing/)
+const bc = new BroadcastChannel(`attendance-board:${room}`);
 const peerId = shortId();
-const channelName = `webrtc-room-${room}`;
-const bc = new BroadcastChannel(channelName);
 
-let remotePeerId = null;
-let isCaller = false;
-
-// WebRTC config
-// ICE server config is required in general; below is a common public STUN example (optional for same-network tests).
-// WebRTC docs explain that peers need ICE server configuration (STUN/TURN) to discover candidates. [1](https://webrtc.org/getting-started/peer-connections)
-const pc = new RTCPeerConnection({
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-});
-
-$("conn").textContent = pc.connectionState;
-$("ice").textContent = pc.iceConnectionState;
-
-pc.onconnectionstatechange = () => {
-  $("conn").textContent = pc.connectionState;
-  logLine(`[PC] connectionState = ${pc.connectionState}`);
-};
-
-pc.oniceconnectionstatechange = () => {
-  $("ice").textContent = pc.iceConnectionState;
-  logLine(`[PC] iceConnectionState = ${pc.iceConnectionState}`);
-};
-
-// DataChannel
-let dc = null;
-
-// callee side: receive datachannel
-pc.ondatachannel = (ev) => {
-  dc = ev.channel;
-  bindDataChannel(dc, "callee");
-};
-
-function bindDataChannel(channel, roleLabel) {
-  logLine(`[DC] datachannel received/opened as ${roleLabel}`);
-  channel.onopen = () => {
-    logLine("[DC] open");
-    $("send").disabled = false;
-  };
-  channel.onclose = () => {
-    logLine("[DC] close");
-    $("send").disabled = true;
-  };
-  channel.onmessage = (e) => {
-    logLine(`[REMOTE] ${e.data}`);
-  };
+function broadcast(type, payload){
+  bc.postMessage({ type, payload, from: peerId, at: Date.now() });
 }
 
-// Queue ICE candidates until remote description is set
-let pendingRemoteCandidates = [];
-
-async function addCandidateSafely(candidateObj) {
-  if (!candidateObj) return;
-  // If remoteDescription is not set yet, queue it.
-  if (!pc.remoteDescription) {
-    pendingRemoteCandidates.push(candidateObj);
-    return;
-  }
-  try {
-    await pc.addIceCandidate(candidateObj);
-  } catch (err) {
-    logLine(`[ICE] addIceCandidate failed: ${err}`);
-  }
-}
-
-async function flushCandidates() {
-  if (!pc.remoteDescription) return;
-  const q = pendingRemoteCandidates;
-  pendingRemoteCandidates = [];
-  for (const c of q) {
-    await addCandidateSafely(c);
-  }
-}
-
-// Send ICE candidates to the other tab via BroadcastChannel
-pc.onicecandidate = (event) => {
-  if (!event.candidate) return;
-  bc.postMessage({
-    type: "ice",
-    from: peerId,
-    to: remotePeerId,      // may be null; receiver will still ignore non-matching if to is set
-    candidate: event.candidate
-  });
-};
-
-// --- Signaling messages ---
-// WebRTC signaling is not specified; any mechanism can be used. [1](https://webrtc.org/getting-started/peer-connections)
-bc.onmessage = async (event) => {
-  const msg = event.data;
+bc.onmessage = (ev) => {
+  const msg = ev.data;
   if (!msg || msg.from === peerId) return;
 
-  // If "to" is set and it's not for me, ignore.
-  if (msg.to && msg.to !== peerId) return;
-
-  // Remember remote id
-  if (!remotePeerId) remotePeerId = msg.from;
-
-  if (msg.type === "hello") {
-    // Reply so each tab learns the other's id
-    bc.postMessage({ type: "hello-ack", from: peerId, to: msg.from });
-    return;
-  }
-
-  if (msg.type === "hello-ack") {
-    return;
-  }
-
-  if (msg.type === "offer") {
-    logLine("[SIG] offer received");
-    try {
-      await pc.setRemoteDescription(msg.offer);
-      await flushCandidates();
-
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      bc.postMessage({
-        type: "answer",
-        from: peerId,
-        to: msg.from,
-        answer: pc.localDescription
-      });
-      logLine("[SIG] answer sent");
-    } catch (err) {
-      logLine(`[SIG] handling offer failed: ${err}`);
-    }
-    return;
-  }
-
-  if (msg.type === "answer") {
-    logLine("[SIG] answer received");
-    try {
-      await pc.setRemoteDescription(msg.answer);
-      await flushCandidates();
-    } catch (err) {
-      logLine(`[SIG] handling answer failed: ${err}`);
-    }
-    return;
-  }
-
-  if (msg.type === "ice") {
-    // Candidate can arrive before SDP; queue it.
-    await addCandidateSafely(msg.candidate);
-    return;
+  if (msg.type === "state") {
+    // 受信したstateで上書き
+    state = msg.payload;
+    // 保存しておく（リロード耐性）
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    render();
   }
 };
 
-// Say hello on load
-bc.postMessage({ type: "hello", from: peerId });
-logLine(`[SYS] peerId=${peerId} channel=${channelName}`);
+// ===== UI =====
+let state = loadState();
+$("names").value = state.names.join("\n");
+$("updated").textContent = state.updatedAt;
 
-// ===== Step 3-2/3-3: Create Offer (Caller) =====
-async function createOfferFlow() {
-  if (isCaller) {
-    logLine("[UI] already caller");
-    return;
+$("saveNames").addEventListener("click", () => {
+  const lines = $("names").value
+    .split("\n")
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  // 名前更新：新規はoutで追加、削除はstatusも整理
+  const newStatus = {};
+  for (const n of lines) {
+    newStatus[n] = state.status?.[n] ?? { state:"out", updatedAt: nowStr() };
   }
+  state = { names: lines, status: newStatus, updatedAt: nowStr() };
+  saveState(state);
+  broadcast("state", state);
+  render();
+});
 
-  isCaller = true;
-  logLine("[UI] create offer...");
+$("resetAll").addEventListener("click", () => {
+  for (const n of state.names) {
+    state.status[n] = { state:"out", updatedAt: nowStr() };
+  }
+  saveState(state);
+  broadcast("state", state);
+  render();
+});
 
-  // Caller creates the data channel BEFORE offer so it's negotiated.
-  dc = pc.createDataChannel("chat");
-  bindDataChannel(dc, "caller");
-
-  // Create offer and set local description (recommended flow) [2](https://webrtc.org/getting-started/peer-connections-advanced)[5](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/createOffer)
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  // Send to the other tab via signaling
-  bc.postMessage({
-    type: "offer",
-    from: peerId,
-    to: remotePeerId, // may be null; other tab will still receive if to is null
-    offer: pc.localDescription
-  });
-
-  logLine("[SIG] offer sent");
+function setStatus(name, next){
+  state.status[name] = { state: next, updatedAt: nowStr() };
+  saveState(state);
+  broadcast("state", state);
+  render();
 }
 
-$("create-offer").addEventListener("click", () => {
-  createOfferFlow().catch(err => logLine(`[UI] createOfferFlow failed: ${err}`));
-});
+function statusLabel(s){
+  if (s === "in") return "出勤";
+  if (s === "remote") return "リモート";
+  return "退勤";
+}
 
-// ===== Chat UI =====
-$("send").addEventListener("click", () => {
-  const text = $("msg").value.trim();
-  if (!text) return;
-  if (!dc || dc.readyState !== "open") {
-    logLine("[DC] not open yet");
-    return;
+function render(){
+  $("names").value = state.names.join("\n");
+  $("updated").textContent = state.updatedAt;
+
+  const board = $("board");
+  board.innerHTML = "";
+
+  for (const name of state.names) {
+    const st = state.status[name]?.state ?? "out";
+    const updatedAt = state.status[name]?.updatedAt ?? "-";
+
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const left = document.createElement("div");
+    left.className = "statusline";
+
+    const title = document.createElement("div");
+    title.className = "name";
+    title.textContent = name;
+
+    const tag = document.createElement("div");
+    tag.className = "tag";
+    tag.innerHTML = `
+      <span class="dot ${st}"></span>
+      <span class="badge ${st === "in" ? "in" : st === "remote" ? "remote" : "out"}">
+        ${statusLabel(st)}
+      </span>
+      <span class="small">更新: ${updatedAt}</span>
+    `;
+
+    left.appendChild(title);
+    left.appendChild(tag);
+
+    const right = document.createElement("div");
+    right.className = "buttons";
+
+    const bIn = document.createElement("button");
+    bIn.className = "btn-in";
+    bIn.textContent = "出勤";
+    bIn.onclick = () => setStatus(name, "in");
+
+    const bRemote = document.createElement("button");
+    bRemote.className = "btn-remote";
+    bRemote.textContent = "リモート";
+    bRemote.onclick = () => setStatus(name, "remote");
+
+    const bOut = document.createElement("button");
+    bOut.className = "btn-out";
+    bOut.textContent = "退勤";
+    bOut.onclick = () => setStatus(name, "out");
+
+    right.appendChild(bIn);
+    right.appendChild(bRemote);
+    right.appendChild(bOut);
+
+    card.appendChild(left);
+    card.appendChild(right);
+
+    board.appendChild(card);
   }
-  dc.send(text);
-  logLine(`[ME] ${text}`);
-  $("msg").value = "";
-});
+}
 
-// cleanup
+// 初回レンダ
+saveState(state);
+render();
+
+// 片方のタブが開いたとき、最新stateを投げて同期を早める
+broadcast("state", state);
+
+// 後片付け
 window.addEventListener("beforeunload", () => {
   try { bc.close(); } catch {}
-  try { pc.close(); } catch {}
 });
