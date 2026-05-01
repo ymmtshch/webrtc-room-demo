@@ -1,0 +1,94 @@
+:root{
+  --bg:#f7f7fb;
+  --box:#fff;
+  --line:#e7e7ef;
+  --text:#111;
+  --muted:#666;
+
+  --in:#1f8b4c;
+  --remote:#2563eb;
+  --out:#6b7280;
+}
+
+*{ box-sizing:border-box; }
+body{
+  margin:16px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+h1,h2{ margin:0 0 10px; }
+.box{
+  background:var(--box);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:12px;
+  margin-bottom:12px;
+}
+.row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.hint{ color:var(--muted); margin:6px 0 0; }
+.small{ color:var(--muted); font-size:0.9em; }
+code{ background:#f1f1f6; padding:2px 6px; border-radius:6px; }
+
+#shareUrl{ width:min(720px,100%); padding:8px; }
+textarea{
+  width:min(720px,100%);
+  height:120px;
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:8px;
+}
+button{
+  padding:8px 12px;
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:8px;
+  cursor:pointer;
+}
+button:hover{ background:#fafafa; }
+button.danger{ border-color:#f3c6c6; color:#a11; }
+
+.legend{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+
+.badge{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  color:#fff;
+  font-weight:600;
+  font-size:0.9em;
+}
+.badge.in{ background:var(--in); }
+.badge.remote{ background:var(--remote); }
+.badge.out{ background:var(--out); }
+
+.board{ display:flex; flex-direction:column; gap:8px; }
+.card{
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:10px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+}
+.name{ font-weight:700; }
+.statusline{ display:flex; flex-direction:column; gap:2px; }
+.buttons{ display:flex; gap:8px; flex-wrap:wrap; }
+
+.btn-in{ border-color:rgba(31,139,76,.35); }
+.btn-remote{ border-color:rgba(37,99,235,.35); }
+.btn-out{ border-color:rgba(107,114,128,.35); }
+
+.tag{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.dot{
+  width:10px; height:10px; border-radius:50%;
+  background:#999;
+}
+.dot.in{ background:var(--in); }
+.dot.remote{ background:var(--remote); }
+.dot.out{ background:var(--out); }
