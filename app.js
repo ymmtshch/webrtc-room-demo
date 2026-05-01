@@ -1,5 +1,4 @@
-console.log("app.js is loaded");
-
+// --- Step 2-x ---
 function createRoomId() {
   return crypto.randomUUID().slice(0, 8);
 }
@@ -13,11 +12,13 @@ if (!room) {
 }
 
 console.log("Current room:", room);
-
 document.getElementById("room").textContent =
   "Room: " + room;
 
-
-
+// --- Step 3-1 ---
 const pc = new RTCPeerConnection();
 console.log("RTCPeerConnection created", pc);
+
+pc.oniceconnectionstatechange = () => {
+  console.log("ICE state:", pc.iceConnectionState);
+};
