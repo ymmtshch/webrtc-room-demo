@@ -29,3 +29,6 @@ async function createOffer() {
   await pc.setLocalDescription(offer);
   console.log("Offer created:", offer);
 }
+
+document.getElementById("make-offer")
+  .addEventListener("click", createOffer);
