@@ -24,11 +24,15 @@ pc.oniceconnectionstatechange = () => {
 };
 
 // --- Step 3-2 ---
+const pc = new RTCPeerConnection();
+console.log("RTCPeerConnection created", pc);
+
 async function createOffer() {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   console.log("Offer created:", offer);
 }
 
-document.getElementById("make-offer")
+document
+  .getElementById("make-offer")
   .addEventListener("click", createOffer);
