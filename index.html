@@ -3,46 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>WebRTC Room Demo (No Server Signaling)</title>
-  <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 16px; }
-    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-    .box { border:1px solid #ddd; padding:12px; border-radius:8px; margin-top:12px; }
-    input, textarea { width: min(720px, 100%); }
-    textarea { height: 140px; }
-    code { background:#f6f6f6; padding:2px 6px; border-radius:6px; }
-    .small { color:#666; font-size: 0.9em; }
-    button { padding: 8px 12px; }
-  </style>
+  <title>在席ボード（出勤/退勤/リモート）</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>WebRTC Room Demo (Step 3-3 Complete)</h1>
-
-  <div class="box">
-    <div>Room: <code id="room"></code></div>
-    <div class="small">同じ <code>?room=xxxx</code> のURLを<strong>別タブ</strong>で開くと接続します。</div>
-
-    <div class="row" style="margin-top:10px;">
-      <button id="create-offer">Create Offer (Caller)</button>
-      <span>Connection: <code id="conn">-</code></span>
-      <span>ICE: <code id="ice">-</code></span>
-    </div>
-
-    <div style="margin-top:10px;">
-      Share URL:
-      <input id="shareUrl" readonly />
-      <button id="copyUrl">Copy</button>
-    </div>
-  </div>
-
-  <div class="box">
-    <h2>DataChannel Chat</h2>
+  <header class="box">
+    <h1>在席ボード</h1>
     <div class="row">
-      <input id="msg" placeholder="Type message..." />
-      <button id="send" disabled>Send</button>
+      <div>Room: <code id="room"></code></div>
+      <input id="shareUrl" readonly />
+      <button id="copyUrl">URLコピー</button>
     </div>
-    <textarea id="log" readonly></textarea>
-  </div>
+    <p class="hint">同じ <code>?room=xxxx</code> のURLを別タブで開くと状態が同期されます（同一オリジンのタブ間通信：BroadcastChannel）。</p>
+  </header>
+
+  <section class="box">
+    <h2>メンバー設定</h2>
+    <p class="hint">「名前を1行ずつ」入力 → 保存。例：山田太郎</p>
+    <textarea id="names" placeholder="名前を1行ずつ入力"></textarea>
+    <div class="row">
+      <button id="saveNames">名前を保存</button>
+      <button id="resetAll" class="danger">全員を退勤にする</button>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>ステータス</h2>
+    <div class="legend">
+      <span class="badge in">出勤</span>
+      <span class="badge remote">リモート</span>
+      <span class="badge out">退勤</span>
+      <span class="small">最終更新: <span id="updated">-</span></span>
+    </div>
+
+    <div id="board" class="board"></div>
+  </section>
 
   <script src="app.js"></script>
 </body>
